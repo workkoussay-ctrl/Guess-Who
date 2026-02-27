@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess Who - Football Edition</title>
+<link rel="manifest" href="manifest.json">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+
+  background-image: url("https://media02.stockfood.com/largepreviews/Mzg0OTcwNDMx/12418401-Cooking-background-with-fresh-italian-ingredients.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.back-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 26px;
+  text-decoration: none;
+  background: #000;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 50%;
+  z-index: 9999;
+  display: block;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6); /* filtre sombre */
+  z-index: -1;
+}
+
+h1 {
+  margin-top: 15px;
+}
+
+.controls {
+  margin: 15px;
+}
+
+button {
+  padding: 8px 15px;
+  margin: 5px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#timer {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* PC */
+  gap: 10px;
+  padding: 15px;
+}
+
+.card {
+  background: white;
+  padding: 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card img {
+   width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+
+}
+
+.card p {
+  font-size: 13px;
+  font-weight: 700;      /* plus gras */
+  color: #111;           /* plus foncé */
+  margin: 6px 0 0 0;
+}
+
+.selection-message {
+  display: none;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  background: linear-gradient(45deg, #ff9800, #ff5722);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.05); }
+}
+.card.eliminated {
+  position: relative; /* nécessaire pour le pseudo-élément */
+  cursor: default; /* optionnel : change le curseur */
+}
+
+.card.eliminated::after {
+  content: "X";
+  color: red;
+  font-size: 60px; /* tu peux ajuster la taille */
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* centre le X */
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.5); /* léger voile blanc pour cacher l'image derrière */
+  pointer-events: none; /* ne bloque pas le clic */
+  z-index: 2;
+}
+
+.secret-player-mini {
+  position: fixed;  /* reste visible même quand tu scroll ou joues */
+  top: 10px;
+  left: 10px;       /* coin en haut à gauche */
+  width: 100px;     /* petite taille */
+  text-align: center;
+  background: rgba(255, 255, 255, 0.8); /* légèrement translucide */
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 5px;
+  z-index: 1000;   /* devant tout */
+}
+
+.secret-player-mini img {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.secret-player-mini p {
+  font-size: 12px;
+  margin: 2px 0 0 0;
+}
+
+.secret-box {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  width: 90px;
+  height: 90px;
+  border: 3px solid gold;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.secret-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 colonnes sur téléphone */
+  }
+
+  .card img {
+    height: 140px; /* plus grand sur mobile */
+  }
+
+  .card p {
+    font-size: 13px;
+  }
+}
+
+
+.eliminated {
+  opacity: 0.2;
+  transform: scale(0.95);
+}
+</style>
+
+<script>
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+
+let secretChosen = false;
+let selectionMode = false;
+
+// Activer le mode sélection
+function activateSelection() {
+  selectionMode = true;
+
+  const message = document.getElementById("selection-message");
+  message.style.display = "block";
+}
+
+// Fonction quand on clique sur une carte
+function toggle(card) {
+
+  // MODE SELECTION
+  if (selectionMode && !secretChosen) {
+
+    const img = card.querySelector("img").src;
+    const name = card.querySelector("p").innerText;
+
+    document.getElementById("secret-img").src = img;
+    document.getElementById("selection-message").style.display = "none";
+
+    secretChosen = true;
+    selectionMode = false;
+
+    alert("✅ Joueur sélectionné ! Le jeu commence.");
+
+    return; // IMPORTANT pour éviter l'élimination
+  }
+
+ // MODE JEU NORMAL
+if (!secretChosen) {
+  alert("Choisis d'abord ton joueur !");
+  return;
+}
+
+// Toggle élimination (aller / retour)
+if (card.classList.contains("eliminated")) {
+
+  // 👉 Si déjà éliminé → on le remet normal
+  card.classList.remove("eliminated");
+
+} else {
+
+  // 👉 Sinon on l'élimine
+  card.classList.add("eliminated");
+
+  const sound = document.getElementById("eliminate-sound");
+  if (sound) {
+    sound.currentTime = 0;
+    sound.play().catch(()=>{});
+  }
+}
+
+}
+
+// Reset
+function resetGame() {
+
+  document.querySelectorAll(".card").forEach(card => {
+    card.classList.remove("eliminated");
+  });
+
+  secretChosen = false;
+  selectionMode = false;
+
+  document.getElementById("secret-img").src = "";
+  document.getElementById("secret-name").innerText = "";
+}
+
+
+  
+</script>
+</head>
+<body>
+  <a href="index.html" class="back-btn">⬅</a>
+    <h1>GUESS WHO - KITCHEN EDITION 🍕​</h1>
+
+<div class="controls">
+  <button onclick="resetGame()">🔄 Reset Game</button>
+  <button onclick="activateSelection()">🎯 Choisir votre Plat</button>
+  <div id="timer"></div>
+</div>
+
+<div class="secret-box">
+  <img id="secret-img" />
+</div>
+
+<div id="selection-message" class="selection-message">
+  🎯 Fais ton choix !
+</div>
+
+<div class="grid">
+
+<!-- EXAMPLE PLAYERS (tu peux garder les 50 que je t’ai envoyés) -->
+
+<div class="card" onclick="toggle(this)">
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT0jDM8qVmoOfqDCrvUzEUQdlcL4pob3weA3w&s">
+<p>Brik</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2025-10/3577286970ac7916116335565ce964cf.jpg">
+<p>البركوكش</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2025-06/55eaec32c194845ef530f332ba5a0df7.jpg">
+<p>شكشوكة </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2025-01/3ecfd9d45eb0096cc62b0c861657ebbd.jpg">
+<p>مرقة لوبيا</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2024-05/cdac1f67a35d4f9be275145f3892cf95.jpg">
+<p>مصلي علوش</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2023-02/5f8bba5bfa887c0c1091c1135fed3a5d.jpg">
+<p>مرمز</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2023-02/fc216e0bd6629dde7074754ff1b526fa.jpg">
+<p>مرقة بطاطا </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2023-01/5a9573af8db2e17615193f01d73343a2.jpg">
+<p>ملوخيّة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2023-01/ddf392fc9fdb0ba42b104ace7596da4f.jpg">
+<p>مبطّن</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2022-12/5f8e4fdd46600a1765ed29c58ca16655.jpg">
+<p>كمونية </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2022-10/e4591b8e456177c9cb867efcbb5c94f5.png">
+<p>عجة </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2022-06/d34a7ce310dccc538ccacbc26de27a25.jpg">
+<p>قلاية</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2022-04/5f8e8cc1a4fb50821a91bf22c4f71c83.jpg">
+<p>جلبانة </p>
+
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2022-04/233f98d1b290f7085ee4449214484577.jpg">
+<p>مرقة إمّالح </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2026-02/ea422757be177656b4246f9c2468a613.png">
+<p>كسكسي فرفوشة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2026-01/ae5aaf43777303d93a2e339433c432b7.png">
+<p>نواصر</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2022-03/1c675bc98b9c933144d249e123079e02.jpg">
+<p>مرقة كعابر</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2025-04/b92b9611854031ebd236517b2863830d.jpg">
+<p>ملاوي</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2025-05/3b223275078b8e62c0b72edf72f23c73.jpg">
+<p>دويدة مفورة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2024-11/93b44c27f5d41ff76d7a63bffad1838a.jpg">
+<p>مقرونة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/1/2024-06/414cf817d46b8e2a5cfb22ed40ced341.jpeg">
+<p>شباتي المهدية</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2024-05/04136e86bc2cbcfeb3cfc6be402be131.jpg">
+<p>رشتة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2022-11/76a607eabd98f4b620e30eeb1692b486.jpg">
+<p>طاجين </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2023-04/a5a9709054fcdcb8464068672dc9fa10.jpg">
+<p>محمصة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2024-12/5916dbc1b3d61aacb5fe683ab40e6129.jpg">
+<p>سوفلي</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2024-10/efa4e2e77a9a1c92ec0ff6da44241b1a.jpg">
+<p>بيتزا في المقلاة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2026-01/c57be50572b99572002a1efc44c6b880.png">
+<p>سلطة مشوية</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2021-07/c9fd43f602d78288b072c59f87605085.jpg">
+<p>فريكاسي</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://frichk.com/wp-content/uploads/2024/08/frichk-plat-et-salades-plat-tunisien.jpg">
+<p>صحن تونسي</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2025-06/ea2c5c80ae9c34fe599d4c3ed2e75191.jpg">
+<p>كفتاجي </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2026-01/48946bd6622af74368348d7734c818d3.png">
+<p>سلطة أمك حوريّة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/11/2019-11/53ff5ea0fa1600c4537fad92fd5e319e.png">
+<p>قناوية</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2024-05/c97d698dac68e7872837f7e027782ca5.jpg">
+<p>سلطة مقرونة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRi_x5rsFj4KsKTKgWMdTGDIBhbTMdZZwlY2Q&s">
+<p>شمنكة</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/2/2025-11/0355b49ead61d120a6d82a94c34edfaf.jpg">
+<p>سلطة بلانكيت</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAMmWl921TNkX1L5eRrjbVrKt2_5tmQs1cPg&s">
+<p>كسكسي</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQJF6XFtIlpeF4qwWjxPDsfdj6n0aT-o75rOQ&s">
+<p> روز أزعــر</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cuisine.nessma.tv/uploads/11/2020-01/76ecb890882d9df42fe65d09cbb0d255.png">
+<p>لبلابي</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://www.bennasafi.com/media/large/1608550892_site.borghel.png">
+<p>برغـــل</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSbfZgDMQYH9jFZK7ysQr0qoFODH-Q8NfefBw&s">
+<p>روز جربي</p>
+</div>
+</div>
+</body>
+</html>

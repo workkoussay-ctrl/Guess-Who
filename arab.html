@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess Who - Football Edition</title>
+<link rel="manifest" href="manifest.json">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+
+  background-image: url("https://img.freepik.com/photos-gratuite/environnement-sportif-du-football-depose_23-2151891691.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6); /* filtre sombre */
+  z-index: -1;
+}
+
+h1 {
+  margin-top: 15px;
+}
+
+.controls {
+  margin: 15px;
+}
+
+button {
+  padding: 8px 15px;
+  margin: 5px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.back-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 26px;
+  text-decoration: none;
+  background: #000;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 50%;
+  z-index: 9999;
+  display: block;
+}
+
+body {
+  padding-top: 70px;
+}
+
+#timer {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* PC */
+  gap: 10px;
+  padding: 15px;
+}
+
+.card {
+  background: white;
+  padding: 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card img {
+   width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+
+}
+
+.card p {
+  font-size: 13px;
+  font-weight: 700;      /* plus gras */
+  color: #111;           /* plus foncé */
+  margin: 6px 0 0 0;
+}
+
+.selection-message {
+  display: none;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  background: linear-gradient(45deg, #ff9800, #ff5722);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.05); }
+}
+.card.eliminated {
+  position: relative; /* nécessaire pour le pseudo-élément */
+  cursor: default; /* optionnel : change le curseur */
+}
+
+.card.eliminated::after {
+  content: "X";
+  color: red;
+  font-size: 60px; /* tu peux ajuster la taille */
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* centre le X */
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.5); /* léger voile blanc pour cacher l'image derrière */
+  pointer-events: none; /* ne bloque pas le clic */
+  z-index: 2;
+}
+
+.secret-player-mini {
+  position: fixed;  /* reste visible même quand tu scroll ou joues */
+  top: 10px;
+  left: 10px;       /* coin en haut à gauche */
+  width: 100px;     /* petite taille */
+  text-align: center;
+  background: rgba(255, 255, 255, 0.8); /* légèrement translucide */
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 5px;
+  z-index: 1000;   /* devant tout */
+}
+
+.secret-player-mini img {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.secret-player-mini p {
+  font-size: 12px;
+  margin: 2px 0 0 0;
+}
+
+.secret-box {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  width: 90px;
+  height: 90px;
+  border: 3px solid gold;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.secret-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 colonnes sur téléphone */
+  }
+
+  .card img {
+    height: 140px; /* plus grand sur mobile */
+  }
+
+  .card p {
+    font-size: 13px;
+  }
+}
+
+
+.eliminated {
+  opacity: 0.2;
+  transform: scale(0.95);
+}
+</style>
+
+<script>
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+
+let secretChosen = false;
+let selectionMode = false;
+
+// Activer le mode sélection
+function activateSelection() {
+  selectionMode = true;
+
+  const message = document.getElementById("selection-message");
+  message.style.display = "block";
+}
+
+// Fonction quand on clique sur une carte
+function toggle(card) {
+
+  // MODE SELECTION
+  if (selectionMode && !secretChosen) {
+
+    const img = card.querySelector("img").src;
+    const name = card.querySelector("p").innerText;
+
+    document.getElementById("secret-img").src = img;
+    document.getElementById("selection-message").style.display = "none";
+
+    secretChosen = true;
+    selectionMode = false;
+
+    alert("✅ Joueur sélectionné ! Le jeu commence.");
+
+    return; // IMPORTANT pour éviter l'élimination
+  }
+
+ // MODE JEU NORMAL
+if (!secretChosen) {
+  alert("Choisis d'abord ton joueur !");
+  return;
+}
+
+// Toggle élimination (aller / retour)
+if (card.classList.contains("eliminated")) {
+
+  // 👉 Si déjà éliminé → on le remet normal
+  card.classList.remove("eliminated");
+
+} else {
+
+  // 👉 Sinon on l'élimine
+  card.classList.add("eliminated");
+
+  const sound = document.getElementById("eliminate-sound");
+  if (sound) {
+    sound.currentTime = 0;
+    sound.play().catch(()=>{});
+  }
+}
+
+}
+
+// Reset
+function resetGame() {
+
+  document.querySelectorAll(".card").forEach(card => {
+    card.classList.remove("eliminated");
+  });
+
+  secretChosen = false;
+  selectionMode = false;
+
+  document.getElementById("secret-img").src = "";
+  document.getElementById("secret-name").innerText = "";
+}
+
+
+  
+</script>
+</head>
+<body>
+  <a href="index.html" class="back-btn">⬅</a>
+
+    <h1>GUESS WHO - FOOTBALL EDITION ⚽</h1>
+
+<div class="controls">
+  <button onclick="resetGame()">🔄 Reset Game</button>
+  <button onclick="activateSelection()">🎯 Choisir un joueur secret</button>
+  <div id="timer"></div>
+</div>
+
+<div class="secret-box">
+  <img id="secret-img" />
+</div>
+
+<div id="selection-message" class="selection-message">
+  🎯 Fais ton choix !
+</div>
+
+<div class="grid">
+
+<!-- EXAMPLE PLAYERS (tu peux garder les 50 que je t’ai envoyés) -->
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/28463-1750785696.jpg">
+<p>Shikabala</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/336646-1725787211.jpg">
+<p>Akram Afif</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/209990-1680827851.jpg">
+<p>Djamel Eddine Benlamri</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/234189-1740665108.jpg">
+<p>Trezeguet</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/31430-1594108516.jpg">
+<p>Issam Jemâa</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/174915-1705958702.jpg">
+<p>Islam Slimani</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/45287-1603795522.jpg">
+<p>Adel Taarabt </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/103565-1702663230.JPG">
+<p>Wahbi Khazri</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/631927-1730124451.jpg">
+<p>Saud Abdulhamid</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/108830-1666194935.JPG">
+<p>Aymen Abdennour </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/175014-1743953300.jpg">
+<p>Youssef Blaili</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/57162-1695219817.png">
+<p>Sofiane Feghouli</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/195332-1697051935.png">
+<p>Salem Al Dawsari</p>
+
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/160438-1682688163.jpg">
+<p>Mohamed Elneny</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/229877-1697050679.png">
+<p>Ali Al-Bulayhi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/4318-1579847444.jpg">
+<p>Hatem Trabelsi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/111524-1703282712.png">
+<p>Ahmed Higazy</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/193153-1685911928.jpg">
+<p>Fahad Al-Muwallad</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/261611-1705017110.png">
+<p>Ali Adnan</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/60517-1738110883.png">
+<p>Yacine Brahimi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/398073-1672304327.jpg">
+<p>Achraf Hakimi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/117747-1429614949.jpg">
+<p>Rabah Madjer</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/209992-1725787911.jpeg">
+<p>Baghdad Bounedjah</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/121534-1701351508.jpg">
+<p>Mehdi Benatia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/31676-1641392816.jpg">
+<p>Yasser Al-Qahtani</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/345095-1737911544.jpg">
+<p>Almoez Ali</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/191903-1738110704.jpg">
+<p>Ferjeni Sassi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/133042-1668422573.jpg">
+<p>Ali Maaloul</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/114149-1762503752.jpg">
+<p>Omar Abdulrahman</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/270411-1679510178.jpg">
+<p>Saif Khaoui</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/220688-1743940892.jpg">
+<p>Omar Al-Somah</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/s_69101_244_2014_01_02_1.jpg">
+<p>Saber Khalifa</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/38165-1574079822.jpg">
+<p>Mohamed Aboutrika</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/433049-1765459421.png">
+<p>Youssef En-Nesyri</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/312017-1494316708.jpg">
+<p>Ramadan Sobhi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/171424-1699948752.jpg">
+<p>Riyad Mahrez</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/25688-1641392783.jpg">
+<p>Mohammed Noor</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/86286-1725787366.jpg">
+<p>Hassan Al-Haydos</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://assets.sorare.com/player/cf8adf7b-9c8c-4755-a728-1397c2c48fd7/picture/avatar-bfec71684aa6aea47a8e76a32c242d69.png">
+<p>Emam Ashour</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/17885-1438158455.jpg">
+<p>Karim Haggui</p>
+</div>
+</div>
+</body>
+</html>

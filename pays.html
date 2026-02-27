@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess Who - Football Edition</title>
+<link rel="manifest" href="manifest.json">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+
+  background-image: url("https://img.freepik.com/photos-gratuite/environnement-sportif-du-football-depose_23-2151891691.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.back-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 26px;
+  text-decoration: none;
+  background: #000;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 50%;
+  z-index: 9999;
+  display: block;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6); /* filtre sombre */
+  z-index: -1;
+}
+
+h1 {
+  margin-top: 15px;
+}
+
+.controls {
+  margin: 15px;
+}
+
+button {
+  padding: 8px 15px;
+  margin: 5px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#timer {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* PC */
+  gap: 10px;
+  padding: 15px;
+}
+
+.card {
+  background: white;
+  padding: 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card img {
+   width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+
+}
+
+.card p {
+  font-size: 13px;
+  font-weight: 700;      /* plus gras */
+  color: #111;           /* plus foncé */
+  margin: 6px 0 0 0;
+}
+
+.selection-message {
+  display: none;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  background: linear-gradient(45deg, #ff9800, #ff5722);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.05); }
+}
+.card.eliminated {
+  position: relative; /* nécessaire pour le pseudo-élément */
+  cursor: default; /* optionnel : change le curseur */
+}
+
+.card.eliminated::after {
+  content: "X";
+  color: red;
+  font-size: 60px; /* tu peux ajuster la taille */
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* centre le X */
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.5); /* léger voile blanc pour cacher l'image derrière */
+  pointer-events: none; /* ne bloque pas le clic */
+  z-index: 2;
+}
+
+.secret-player-mini {
+  position: fixed;  /* reste visible même quand tu scroll ou joues */
+  top: 10px;
+  left: 10px;       /* coin en haut à gauche */
+  width: 100px;     /* petite taille */
+  text-align: center;
+  background: rgba(255, 255, 255, 0.8); /* légèrement translucide */
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 5px;
+  z-index: 1000;   /* devant tout */
+}
+
+.secret-player-mini img {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.secret-player-mini p {
+  font-size: 12px;
+  margin: 2px 0 0 0;
+}
+
+.secret-box {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  width: 90px;
+  height: 90px;
+  border: 3px solid gold;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.secret-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 colonnes sur téléphone */
+  }
+
+  .card img {
+    height: 140px; /* plus grand sur mobile */
+  }
+
+  .card p {
+    font-size: 13px;
+  }
+}
+
+
+.eliminated {
+  opacity: 0.2;
+  transform: scale(0.95);
+}
+</style>
+
+<script>
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+
+let secretChosen = false;
+let selectionMode = false;
+
+// Activer le mode sélection
+function activateSelection() {
+  selectionMode = true;
+
+  const message = document.getElementById("selection-message");
+  message.style.display = "block";
+}
+
+// Fonction quand on clique sur une carte
+function toggle(card) {
+
+  // MODE SELECTION
+  if (selectionMode && !secretChosen) {
+
+    const img = card.querySelector("img").src;
+    const name = card.querySelector("p").innerText;
+
+    document.getElementById("secret-img").src = img;
+    document.getElementById("selection-message").style.display = "none";
+
+    secretChosen = true;
+    selectionMode = false;
+
+    alert("✅ Joueur sélectionné ! Le jeu commence.");
+
+    return; // IMPORTANT pour éviter l'élimination
+  }
+
+ // MODE JEU NORMAL
+if (!secretChosen) {
+  alert("Choisis d'abord ton joueur !");
+  return;
+}
+
+// Toggle élimination (aller / retour)
+if (card.classList.contains("eliminated")) {
+
+  // 👉 Si déjà éliminé → on le remet normal
+  card.classList.remove("eliminated");
+
+} else {
+
+  // 👉 Sinon on l'élimine
+  card.classList.add("eliminated");
+
+  const sound = document.getElementById("eliminate-sound");
+  if (sound) {
+    sound.currentTime = 0;
+    sound.play().catch(()=>{});
+  }
+}
+
+}
+
+// Reset
+function resetGame() {
+
+  document.querySelectorAll(".card").forEach(card => {
+    card.classList.remove("eliminated");
+  });
+
+  secretChosen = false;
+  selectionMode = false;
+
+  document.getElementById("secret-img").src = "";
+  document.getElementById("secret-name").innerText = "";
+}
+
+
+  
+</script>
+</head>
+<body>
+  <a href="index.html" class="back-btn">⬅</a>
+    <h1>GUESS WHO - COUNTRY EDITION 🚩</h1>
+
+<div class="controls">
+  <button onclick="resetGame()">🔄 Reset Game</button>
+  <button onclick="activateSelection()">🎯 Choisir un Pays</button>
+  <div id="timer"></div>
+</div>
+
+<div class="secret-box">
+  <img id="secret-img" />
+</div>
+
+<div id="selection-message" class="selection-message">
+  🎯 Fais ton choix !
+</div>
+<div class="grid">
+
+<!-- EXAMPLE PLAYERS (tu peux garder les 50 que je t’ai envoyés) -->
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2881/5821/2x3-south-africa-flag-image__91638.1582737614.jpg">
+<p>Afrique du Sud</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2716/5608/2x3-croatia-flag-image__86535.1582736383.jpg">
+<p>Croatia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2627/5480/2x3-china-flag-image__52483.1582736135.jpg">
+<p>Chine</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2637/5495/2x3-ghana-flag-image__47054.1582736163.jpg">
+<p>Ghana</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2712/5602/2x3-congo-democratic-republic-flag-image__19074.1582736372.jpg">
+<p>Congo RDC</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2602/5447/2x3-japan-flag-image__95149.1582736065.jpg">
+<p>Japan</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2696/5578/2x3-algeria-flag-image__35437.1582736326.jpg">
+<p>Algerie </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2841/5770/2x3-malaysia-flag-image__96075.1582737510.jpg">
+<p> Malaysia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2545/5363/2x3-luxembourg-flag-image__77519.1582735746.jpg">
+<p> Luxembourg</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2667/5540/2x3-qatar-flag-image__66518.1582736245.jpg">
+<p>Qatar </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2535/5348/2x3-ireland-flag-image__75783.1582735723.jpg">
+<p>Irlande</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2835/5762/2x3-north-korea-flag-image__84805.1582737495.jpg">
+<p>Corée du Nord</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2586/5421/2x3-canada-flag-image__99191.1582736015.jpg">
+<p>Canada</p>
+
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2511/5315/2x3-colombia-flag-image__18985.1582735666.jpg">
+<p>Colombie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2522/5330/2x3-gabon-flag-image__13824.1582735693.jpg">
+<p>Gabon</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2948/5908/2x3-iraq-flag-image__61453.1582737801.jpg">
+<p>Iraq</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2481/5274/2x3-australia-flag-image__02971.1582735594.jpg">
+<p>Australie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2561/5386/2x3-poland-flag-image__75707.1582735783.jpg">
+<p>Poland</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2770/5677/2x3-serbia-with-seal-flag-image__30208.1582737322.jpg">
+<p>Serbie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2677/5554/2x3-singapore-flag-image__74262.1582736273.jpg">
+<p>Singapore</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2710/5599/2x3-brazil-flag-image__32809.1582736366.jpg">
+<p>Brasil</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/original/products/2866/5803/2x3-peru-with-seal-flag-image__49612.1582737578.jpg">
+<p>Peru</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2675/5551/2x3-senegal-flag-image__41526.1582736267.jpg">
+<p> Senegal</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2614/5465/2x3-switzerland-flag-image__52471.1582736099.jpg">
+<p>Switzerland</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2760/5671/2x3-philippines-flag-image__24756.1582737299.jpg">
+<p>Philippines</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2647/5510/2x3-iran-flag-image__04447.1582736190.jpg">
+<p>Iran</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2778/5688/2x3-tunisia-flag-image__41239.1582737342.jpg">
+<p>Tunisia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2782/5694/2x3-venezuela-flag-image__54097.1582737353.jpg">
+<p> Venezuela</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2659/5528/2x3-pakistan-flag-image__84105.1582736224.jpg">
+<p>Pakistan</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2673/5548/2x3-saudi-arabia-flag-image__04054.1582736261.jpg">
+<p>Saudi Arabia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2897/5845/2x3-uruguay-flag-image__41410.1582737659.jpg">
+<p>Uruguay</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2867/5804/2x3-portugal-flag-image__93108.1582737579.jpg">
+<p>Portugal</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2533/5345/2x3-indonesia-flag-image__50507.1582735718.jpg">
+<p>Indonisie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2649/5513/2x3-kuwait-flag-image__72938.1582736196.jpg">
+<p>Kuwait</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2663/5534/2x3-palestine-flag-image__03054.1582736235.jpg">
+<p>Palestine</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2623/5475/2x3-argentina-with-seal-flag-image__21194.1582736125.jpg">
+<p>Argentine</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2633/5489/2x3-egypt-flag-image__59748.1582736152.jpg">
+<p>Egypte</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2513/5318/2x3-costa-rica-flag-image__93873.1582735671.jpg">
+<p>Costa Rica</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2537/5351/2x3-italy-flag-image__24762.1582735728.jpg">
+<p>Italie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2645/5507/2x3-india-flag-image__82911.1582736185.jpg">
+<p>India</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2485/5280/2x3-afghanistan-flag-image__54963.1582735603.jpg">
+<p>Afghanistan</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2608/5456/2x3-norway-flag-image__52801.1582736082.jpg">
+<p>Norway</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2570/5399/2x3-sierra-leone-flag-image__05569.1582735804.jpg">
+<p>Sierra Lioene</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2758/5668/2x3-paraguay-flag-image__80538.1582737294.jpg">
+<p>Paraguay</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2524/5333/2x3-germany-flag-image__20615.1582735698.jpg">
+<p>Allmagne</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2558/5382/2x3-nigeria-flag-image__82041.1582735776.jpg">
+<p>Nigeria</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2922/5875/2x3-bolivia-with-seal-flag-image__17408.1582737728.jpg">
+<p>Bolivie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/3570/6931/2x3-oman-flag-image__58055.1585338289.jpg">
+<p>Oman</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2573/5403/2x3-sweden-flag-image__71687.1582735979.jpg">
+<p>Suède</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2939/5896/2x3-ecuador-with-seal-flag-image__69332.1582737778.jpg">
+<p>Ecuador</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2505/5306/2x3-bulgaria-flag-image__56363.1582735652.jpg">
+<p>Bulgarie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2905/5854/2x3-zambia-flag-image__93631.1582737681.jpg">
+<p>Zambie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2885/5827/2x3-sri-lanka-flag-image__58007.1582737626.jpg">
+<p>Sri Lanka</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2665/5537/2x3-panama-flag-image__76053.1582736240.jpg">
+<p>Panama</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2875/5812/2x3-slovakia-flag-image__17520.1582737599.jpg">
+<p>Slovaquie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2968/5927/2x3-uganda-flag-image__09692.1582737857.jpg">
+<p>Ouganda</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2899/5848/2x3-uzbekistan-flag-image__74929.1582737664.jpg">
+<p>Uzbekistan</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2957/5919/2x3-nicaragua-with-seal-flag-image__85187.1582737829.jpg">
+<p>Nicaragua</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2543/5360/2x3-lithuania-flag-image__86312.1582735742.jpg">
+<p>Lituanie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2851/5782/2x3-namibia-flag-image__32552.1582737536.jpg">
+<p>Namibia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2641/8118/2x3-honduras-flag-image__58268__65884.1698684917.png">
+<p>Honduras</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2857/5791/2x3-nepal-flag-image__75119.1582737552.jpg">
+<p>Népal</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2503/5303/2x3-botswana-flag-image__91413.1582735648.jpg">
+<p>Botswana</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2829/5755/2x3-hungary-1921-1946-flag-image__20720.1582737476.jpg">
+<p>Hongrie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2780/5691/2x3-turkey-flag-image__62102.1714497083.jpg">
+<p>Turquie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2694/5575/2x3-albania-flag-image__94317.1582736321.jpg">
+<p>Albanie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2612/5462/2x3-somalia-flag-image__58730.1582736093.jpg">
+<p>Somalie</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/960w/products/2847/5776/2x3-morocco-flag-image__26702.1582737525.jpg">
+<p>Maroc</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn11.bigcommerce.com/s-w6fxwapwzi/images/stencil/1280x1280/products/2794/5989/2x3-bosnia-herzegovina-flag-image__95740.1582743840.jpg">
+<p>Bosnia & Herzegovina</p>
+</div>
+
+</div>
+</body>
+</html>

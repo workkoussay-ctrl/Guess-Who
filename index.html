@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess Who - Game</title>
+<link rel="manifest" href="manifest.json">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+
+  background-image: url("https://img.freepik.com/free-vector/gradient-question-mark-pattern_23-2149405529.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6); /* filtre sombre */
+  z-index: -1;
+}
+
+
+
+.mode-card {
+  background: white;
+  width: 130px;
+  height: 150px;
+  border-radius: 20px;
+  text-decoration: none;
+  color: black;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  transition: 0.3s;
+}
+
+.mode-card img {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 10px;
+}
+
+.mode-card p {
+  font-weight: bold;
+  font-size: 14px;
+  text-align: center;
+}
+
+.mode-card:hover {
+  transform: scale(1.1);
+}
+
+h1 {
+  margin-top: 15px;
+  color: #ffffff;
+  font-size: xx-large;
+}
+
+.controls {
+  margin: 15px;
+}
+
+button {
+  padding: 8px 15px;
+  margin: 5px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#timer {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.mode-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  justify-items: center;
+  margin-top: 40px;
+}
+
+
+.card {
+  background: white;
+  padding: 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card img {
+   width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+
+}
+
+.card p {
+  font-size: 13px;
+  font-weight: 700;      /* plus gras */
+  color: #111;           /* plus foncé */
+  margin: 6px 0 0 0;
+}
+
+.selection-message {
+  display: none;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  background: linear-gradient(45deg, #ff9800, #ff5722);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.05); }
+}
+.card.eliminated {
+  position: relative; /* nécessaire pour le pseudo-élément */
+  cursor: default; /* optionnel : change le curseur */
+}
+
+.card.eliminated::after {
+  content: "X";
+  color: red;
+  font-size: 60px; /* tu peux ajuster la taille */
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* centre le X */
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.5); /* léger voile blanc pour cacher l'image derrière */
+  pointer-events: none; /* ne bloque pas le clic */
+  z-index: 2;
+}
+
+.secret-player-mini {
+  position: fixed;  /* reste visible même quand tu scroll ou joues */
+  top: 10px;
+  left: 10px;       /* coin en haut à gauche */
+  width: 100px;     /* petite taille */
+  text-align: center;
+  background: rgba(255, 255, 255, 0.8); /* légèrement translucide */
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 5px;
+  z-index: 1000;   /* devant tout */
+}
+
+.secret-player-mini img {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.secret-player-mini p {
+  font-size: 12px;
+  margin: 2px 0 0 0;
+}
+
+.secret-box {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  width: 90px;
+  height: 90px;
+  border: 3px solid gold;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.secret-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 colonnes sur téléphone */
+  }
+
+  .card img {
+    height: 140px; /* plus grand sur mobile */
+  }
+
+  .card p {
+    font-size: 13px;
+  }
+}
+
+
+.eliminated {
+  opacity: 0.2;
+  transform: scale(0.95);
+}
+</style>
+
+<script>
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+
+  
+</script>
+
+</head>
+<body>
+
+<h1>GUESS WHO - GAME EDITION </h1>
+
+
+<div style="margin-top:40px;">
+
+  <div class="mode-container">
+
+  <a href="world.html" class="mode-card">
+    <img src="https://static.vecteezy.com/system/resources/thumbnails/017/443/382/small/trophy-world-cup-football-free-png.png" >
+    <p>Monde</p>
+  </a>
+
+  <a href="arab.html" class="mode-card">
+    <img src="https://assets-fr.imgfoot.com/media/cache/150x150/coupe-arabe.png" >
+    <p>Joueurs Arabes</p>
+  </a>
+
+  <a href="tunisia.html" class="mode-card">
+    <img src="https://upload.wikimedia.org/wikipedia/fr/8/85/Ligue_nationale_de_football_professionnel_%28Tunisie%29.png" >
+    <p>Championnat Tunisien</p>
+  </a>
+
+  <a href="pays.html" class="mode-card">
+    <img src="https://img.freepik.com/photos-premium/sphere-du-globe-drapeaux-du-monde-blanc-composition-du-drapeau-du-monde_1163725-671.jpg" >
+    <p>Pays</p>
+  </a>
+
+  <a href="mekla.html" class="mode-card">
+    <img src="https://cdn-icons-png.flaticon.com/512/9417/9417083.png" >
+    <p>Cuisine Tunisienne</p>
+  </a>
+</div>
+
+<a href="work.html" class="mode-card">
+    <img src="https://logopond.com/logos/work.gif" >
+    <p>Travail</p>
+  </a>
+</div>
+
+<a href="serie.html" class="mode-card">
+    <img src="https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/i/54fbf860-1d0d-46e7-a22a-74edb3053c67/d6qj64q-f30328aa-5b8c-4ec4-979a-dea8d78c5498.png" >
+    <p>Série Tunisienne</p>
+  </a>
+</div>
+
+
+
+</body>
+</html>

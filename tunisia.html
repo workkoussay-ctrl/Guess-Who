@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess Who - Football Edition</title>
+<link rel="manifest" href="manifest.json">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+
+  background-image: url("https://img.freepik.com/photos-gratuite/environnement-sportif-du-football-depose_23-2151891691.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.back-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 26px;
+  text-decoration: none;
+  background: #000;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 50%;
+  z-index: 9999;
+  display: block;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6); /* filtre sombre */
+  z-index: -1;
+}
+
+h1 {
+  margin-top: 15px;
+}
+
+.controls {
+  margin: 15px;
+}
+
+button {
+  padding: 8px 15px;
+  margin: 5px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#timer {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* PC */
+  gap: 10px;
+  padding: 15px;
+}
+
+.card {
+  background: white;
+  padding: 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card img {
+   width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+
+}
+
+.card p {
+  font-size: 13px;
+  font-weight: 700;      /* plus gras */
+  color: #111;           /* plus foncé */
+  margin: 6px 0 0 0;
+}
+
+.selection-message {
+  display: none;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  background: linear-gradient(45deg, #ff9800, #ff5722);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.05); }
+}
+.card.eliminated {
+  position: relative; /* nécessaire pour le pseudo-élément */
+  cursor: default; /* optionnel : change le curseur */
+}
+
+.card.eliminated::after {
+  content: "X";
+  color: red;
+  font-size: 60px; /* tu peux ajuster la taille */
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* centre le X */
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.5); /* léger voile blanc pour cacher l'image derrière */
+  pointer-events: none; /* ne bloque pas le clic */
+  z-index: 2;
+}
+
+.secret-player-mini {
+  position: fixed;  /* reste visible même quand tu scroll ou joues */
+  top: 10px;
+  left: 10px;       /* coin en haut à gauche */
+  width: 100px;     /* petite taille */
+  text-align: center;
+  background: rgba(255, 255, 255, 0.8); /* légèrement translucide */
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 5px;
+  z-index: 1000;   /* devant tout */
+}
+
+.secret-player-mini img {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.secret-player-mini p {
+  font-size: 12px;
+  margin: 2px 0 0 0;
+}
+
+.secret-box {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  width: 90px;
+  height: 90px;
+  border: 3px solid gold;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.secret-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 colonnes sur téléphone */
+  }
+
+  .card img {
+    height: 140px; /* plus grand sur mobile */
+  }
+
+  .card p {
+    font-size: 13px;
+  }
+}
+
+
+.eliminated {
+  opacity: 0.2;
+  transform: scale(0.95);
+}
+</style>
+
+<script>
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+
+let secretChosen = false;
+let selectionMode = false;
+
+// Activer le mode sélection
+function activateSelection() {
+  selectionMode = true;
+
+  const message = document.getElementById("selection-message");
+  message.style.display = "block";
+}
+
+// Fonction quand on clique sur une carte
+function toggle(card) {
+
+  // MODE SELECTION
+  if (selectionMode && !secretChosen) {
+
+    const img = card.querySelector("img").src;
+    const name = card.querySelector("p").innerText;
+
+    document.getElementById("secret-img").src = img;
+    document.getElementById("selection-message").style.display = "none";
+
+    secretChosen = true;
+    selectionMode = false;
+
+    alert("✅ Joueur sélectionné ! Le jeu commence.");
+
+    return; // IMPORTANT pour éviter l'élimination
+  }
+
+ // MODE JEU NORMAL
+if (!secretChosen) {
+  alert("Choisis d'abord ton joueur !");
+  return;
+}
+
+// Toggle élimination (aller / retour)
+if (card.classList.contains("eliminated")) {
+
+  // 👉 Si déjà éliminé → on le remet normal
+  card.classList.remove("eliminated");
+
+} else {
+
+  // 👉 Sinon on l'élimine
+  card.classList.add("eliminated");
+
+  const sound = document.getElementById("eliminate-sound");
+  if (sound) {
+    sound.currentTime = 0;
+    sound.play().catch(()=>{});
+  }
+}
+
+}
+
+// Reset
+function resetGame() {
+
+  document.querySelectorAll(".card").forEach(card => {
+    card.classList.remove("eliminated");
+  });
+
+  secretChosen = false;
+  selectionMode = false;
+
+  document.getElementById("secret-img").src = "";
+  document.getElementById("secret-name").innerText = "";
+}
+
+
+  
+</script>
+</head>
+<body>
+  <a href="index.html" class="back-btn">⬅</a>
+    <h1>GUESS WHO - FOOTBALL EDITION ⚽</h1>
+
+<div class="controls">
+  <button onclick="resetGame()">🔄 Reset Game</button>
+  <button onclick="activateSelection()">🎯 Choisir un joueur secret</button>
+  <div id="timer"></div>
+</div>
+
+<div class="secret-box">
+  <img id="secret-img" />
+</div>
+
+<div id="selection-message" class="selection-message">
+  🎯 Fais ton choix !
+</div>
+<div class="grid">
+
+<!-- EXAMPLE PLAYERS (tu peux garder les 50 que je t’ai envoyés) -->
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/s_103236_123_2013_10_02_1.jpg">
+<p>Chokri El Ouaer</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://images.fotmob.com/image_resources/playerimages/680276.png">
+<p>Hamza Jlassi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/11773.png">
+<p>Saber Khlifa</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/127766-1535052420.jpg">
+<p>Yaya Banana</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/581156-1624211296.jpg">
+<p>Houssem Tka</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/69110-1725823974.png">
+<p>Youssef Msekni</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/100890-1611581589.jpg">
+<p>Nabil Maâloul </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/142252-1696864510.jpg">
+<p>Yassine Khnissi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/11838.png">
+<p>Walid Hichri</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://images.fotmob.com/image_resources/playerimages/303801.png">
+<p>Ramy Jridi </p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/175014-1743953300.jpg">
+<p>Youssef Blaili</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/211474-1756827001.jpg">
+<p>Ali Abdi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/19310-1589556543.jpg">
+<p>Radhi Jaïdi</p>
+
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/83989-1402473575.jpg">
+<p>Abdelmoumene Djabou</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/209992-1725787911.jpeg">
+<p>Baghdad Bounedjah</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/4318-1579847444.jpg">
+<p>Hatem Trabelsi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/63068-1523616348.jpg">
+<p>Aymen Balbouli</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://ar.footballtunisien.com/wp-content/uploads/2021/12/bl16404313092325.png">
+<p>Wissem Yahia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://fmdataba.com/images/p/162626.png">
+<p>Moataz Zemzmi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://tunisie-foot.com/wp-content/uploads/2020/09/7FB4E8F7-38AF-4842-BD4D-70C8549685D4-e1600802424547-780x470.jpeg">
+<p>Idriss Lmhirssi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/133078-1669737134.jpg">
+<p>Syam Ben Youssef</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/133042-1668422573.jpg">
+<p>Ali Maaloul</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/143581-1523616475.jpg">
+<p>Moez Ben chrifia</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/1071742-1759930106.jpg">
+<p>Adem Arouss</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/64740.png">
+<p>Fakhreddine Ben Youssef</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/49838-1444744865.jpg">
+<p>Michael Eneramo</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/191903-1738110704.jpg">
+<p>Ferjeni Sassi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/673511-1708343033.jpg">
+<p>Chiheb Laabidi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://images.fotmob.com/image_resources/playerimages/118524.png">
+<p>Youssef Mouihbi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/80394.png">
+<p>Aymen Ben Mohamed</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/142173-1611582008.jpg">
+<p>Sadok Sassi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/142201-1611582218.jpg">
+<p>Tarak Dhieb</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/373035-1759254599.png">
+<p>Tayeb Meziani</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/407885-1738110635.jpg">
+<p>Wajdi Kechrida</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/206758-1620046013.jpg">
+<p>Samy Hlel</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/416109-1708525676.jpeg">
+<p>Achraf Benayada</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/header/174946-1548013703.png">
+<p>Yannick N'Djeng</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/642295-1703726377.jpg">
+<p>Rodrigue Kossi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://b.fssta.com/uploads/application/soccer/headshots/72863.vresize.350.350.medium.1.png">
+<p>Mohamed Ali Ben Romdhane</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/323859-1637233253.jpg">
+<p>Houcine Benayada</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://www.footballdatabase.eu/images/photos/players/2023-2024/a_135/135368.jpg">
+<p>Hamza mathlouthi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.resfu.com/img_data/players/medium/345996.jpg">
+<p>Youssef Abdeli</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/394-1493389300.jpg">
+<p>Zoubaier baya</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.resfu.com/img_data/players/medium/3276902.jpg">
+<p>Raki Aouani</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://footballtunisien.com/wp-content/uploads/2021/12/bl1639916579178.png">
+<p>Ghazi Abdrazzak</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/97779.png">
+<p>Maher Ben Sghaier</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/94200.png">
+<p>Mohamed Amin Ben Amor</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/657796-1723486529.png">
+<p>Ala Ghram</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/header/275956-1754768603.png">
+<p>Nader Ghandri</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/94347.png">
+<p>Maher Hannachi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/37216.png">
+<p>Wajdi Bouazzi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/191407-1688649752.jpg">
+<p>	Oussama Haddadi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/1206874-1764152991.jpg">
+<p>Amath Ndaw</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://tunisie-foot.com/wp-content/uploads/2021/01/B5C2BEC4-69FF-4CE3-8E34-A9E1FC510A93-390x220.jpeg">
+<p>Karim Aouadhi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://images.fotmob.com/image_resources/playerimages/1206179.png">
+<p>Youssef Oumarou</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/header/230921-1759931275.jpg">
+<p>Mortadha Ben Ounas</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/295382-1631906303.jpg">
+<p>Firas Ben Larbi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/96639.png">
+<p>Foussini Coulibaly</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/348144-1632991446.png">
+<p>Bechir Ben Said</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/153124-1726063196.png">
+<p>Rami Bedoui</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/73687.png">
+<p>Adem Rjaibi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/290993-1723933398.png">
+<p>Ahmed Khalil</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/215677-1686756989.jpg">
+<p>Moez Hsan</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/s_164925_12765_2010_1.jpg">
+<p>Anis Badri</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://fmdataba.com/images/p2/489357.png">
+<p>Yassine Meriah</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/209304-1615124817.jpg">
+<p>Saif Eddin Jaziri</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/s_64147_14171_2012_2.jpg">
+<p>Zouhayer Dhaouedi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/316072-1580812391.jpg">
+<p>Kingsley Soukari</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/header/66319-1589556473.jpg">
+<p>Ammar Jmal</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/532477-1503925206.jpg">
+<p>Kingsley Eduwo</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/172296-1476798144.jpg">
+<p>Mohamed Ali monser</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/122623-1523617107.jpg">
+<p>Ahmed Akaichi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/big/569961-1756232009.png">
+<p>Hamza Khadhraoui</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://cdn.soccerwiki.org/images/player/95463.png">
+<p>Hamza Lahmar</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/header/93447-1696864738.jpg">
+<p>Bilel Ifa</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/header/292219-1686463562.jpg">
+<p>Elyes Jelassi</p>
+</div>
+
+<div class="card" onclick="toggle(this)">
+<img src="https://img.a.transfermarkt.technology/portrait/header/122374-1620936394.JPG">
+<p>Iheb Mbarki</p>
+</div>
+</div>
+</body>
+</html>
